@@ -1,5 +1,5 @@
 # GR-PHI
-Awesome — here’s a drop-in, toy PyTorch implementation of golden-ratio (φ) logarithmic weight quantization with a straight-through estimator (STE) so you can fine-tune through it. It supports:
+toy PyTorch implementation of golden-ratio (φ) logarithmic weight quantization with a straight-through estimator (STE) so you can fine-tune through it. It supports:
 	•	Per-tensor or per-channel (out-channel) quantization
 	•	Optional exponent clipping [e_{\min}, e_{\max}]
 	•	Exponent sharing (“cluster average”) to collapse small groups to a single φ^k
