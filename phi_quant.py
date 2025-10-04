@@ -76,7 +76,8 @@ def cluster_exponents(
     new_shape = list(e.shape)
     new_shape[dim] = e.shape[dim] // cluster_size
     e_grouped = e.reshape(*new_shape, cluster_size)
-    e_avg = e_grouped.mean(dim=-1).round()
+    e_avg = e_grouped.mean(dim=-1)
+    e_avg = STEQuantize.apply(e_avg)
 
     # expand back to original length
     e_expanded = e_avg.unsqueeze(-1).expand_as(e_grouped).reshape(e.shape)
@@ -170,26 +171,38 @@ class PhiWeightQuantizer(nn.Module):
         aux = {"e": e, "sign": sign}
         return Wq, aux
 
-    def forward(self, *args, **kwargs):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         train_mode = self.training
-        W = self._weight()
-        if W is None:
-            return self.module(*args, **kwargs)
+        W_original = self._weight()
+        if W_original is None:
+            return self.module(x)
 
-        # Quantize a shadow weight and use it for the forward
-        Wq, aux = self._quantize_weight_tensor(W, train_mode=train_mode)
+        # Quantize the weight tensor
+        Wq, _ = self._quantize_weight_tensor(W_original, train_mode=train_mode)
 
-        # Use a reparam trick: add and subtract so grads flow to W
-        # y = f(Wq + (W - W).detach()) == f(Wq) in forward,
-        # but backward dL/dW = dL/dWq (STE already applied on exponent)
-        original = self.module.weight
-        self.module.weight = nn.Parameter(Wq + (W - W).detach(), requires_grad=True)
-        try:
-            out = self.module(*args, **kwargs)
-        finally:
-            # restore original parameter
-            self.module.weight = original
-        return out
+        # Use functional calls to ensure graph is not broken
+        if isinstance(self.module, nn.Linear):
+            return F.linear(x, Wq, self.module.bias)
+        elif isinstance(self.module, nn.Conv2d):
+            return F.conv2d(
+                x,
+                Wq,
+                self.module.bias,
+                self.module.stride,
+                self.module.padding,
+                self.module.dilation,
+                self.module.groups,
+            )
+        else:
+            # Fallback for other layer types, though grad flow may not be
+            # guaranteed if they don't support functional equivalents well.
+            original_weight = self.module.weight
+            self.module.weight = nn.Parameter(Wq)
+            try:
+                out = self.module(x)
+            finally:
+                self.module.weight = original_weight
+            return out
 
     @torch.no_grad()
     def export_packed(self) -> Dict[str, torch.Tensor]:

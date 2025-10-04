@@ -1,17 +1,8 @@
 import torch
 import torch.nn as nn
 from phi_quant import PhiWeightQuantizer
-
-class TinyNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.fc1 = nn.Linear(784, 256, bias=False)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(256, 10, bias=False)
-
-    def forward(self, x):
-        x = self.relu(self.fc1(x.view(x.size(0), -1)))
-        return self.fc2(x)
+from models import TinyNet
+from data import get_mnist_loader
 
 def get_user_choice(prompt, valid_choices):
     while True:
@@ -89,18 +80,28 @@ def main():
         if choice == '1':
             print("\n--- Training (QAT) ---")
             net.train()
-            opt = torch.optim.AdamW([p for p in net.parameters() if p.requires_grad], lr=1e-3)
-            print("Training for 100 steps with random data...")
-            for step in range(100):
-                x = torch.randn(64, 784)
-                y = torch.randint(0, 10, (64,))
+            opt = torch.optim.AdamW(net.parameters(), lr=1e-3)
+            train_loader = get_mnist_loader(train=True)
+
+            steps = get_user_integer("Enter number of training steps (e.g., 100): ", 100)
+
+            print(f"Training for {steps} steps with MNIST data...")
+
+            data_iter = iter(train_loader)
+            for step in range(steps):
+                try:
+                    x, y = next(data_iter)
+                except StopIteration:
+                    data_iter = iter(train_loader)
+                    x, y = next(data_iter)
+
                 logits = net(x)
                 loss = nn.CrossEntropyLoss()(logits, y)
                 opt.zero_grad()
                 loss.backward()
                 opt.step()
                 if (step + 1) % 20 == 0:
-                    print(f"Step {step+1}/100, Loss: {loss.item():.4f}")
+                    print(f"Step {step+1}/{steps}, Loss: {loss.item():.4f}")
             print("Training complete.")
 
         elif choice == '2':
