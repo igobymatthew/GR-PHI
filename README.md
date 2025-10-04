@@ -44,6 +44,12 @@ The script will guide you to:
     *   **Estimate Entropy:** Calculate the entropy of the exponents to gauge compressibility.
 
 ---
+*Update: 2025-10-04 08:57:10*
+- Restructured project for modularity (`models.py`, `data.py`).
+- Added a comprehensive test suite with `pytest` for quantization logic and QAT.
+- Enhanced the interactive trainer in `main.py` to use the MNIST dataset.
+
+---
 *Update: 2025-10-02 17:17:43*
 - Extracted core logic into `phi_quant.py`.
 - Created `main.py` for interactive quantization and experimentation.
